@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import initSqlJs from "sql.js";
 import { ref } from "vue";
+import { Check, Copy } from "lucide-vue-next";
+import { Button } from "@/components/ui/button";
+
+import { useClipboard } from "@vueuse/core";
+
+const { copy } = useClipboard();
 
 interface BookEntry {
   ZTITLE?: string;
@@ -12,6 +18,12 @@ interface BookEntry {
   ZLASTOPENDATE?: number;
   ZEPUBID?: string;
   ZURL?: string;
+  ZBOOKDESCRIPTION?: string;
+  ZVERSIONNUMBER?: number;
+  ZRELEASEDATE?: number;
+  ZGENRE?: string;
+  ZSTOREID?: number;
+  ZCOVERASPECTRATIO?: number;
 }
 
 const books = ref<BookEntry[]>([]);
@@ -36,7 +48,7 @@ function process() {
     db = new SQL.Database(Uints);
 
     const query = db.exec(
-      "select ZTITLE, ZAUTHOR, ZISFINISHED, ZDATEFINISHED, ZPURCHASEDATE, ZREADINGPROGRESS, ZLASTOPENDATE, ZEPUBID, ZURL from ZBKLIBRARYASSET where ZCONTENTTYPE = 1 and ZPURCHASEDATE not null order by ZLASTOPENDATE desc;"
+      "select ZTITLE, ZAUTHOR, ZISFINISHED, ZDATEFINISHED, ZPURCHASEDATE, ZREADINGPROGRESS, ZLASTOPENDATE, ZEPUBID, ZURL, ZBOOKDESCRIPTION, ZVERSIONNUMBER, ZRELEASEDATE, ZGENRE, ZSTOREID, ZCOVERASPECTRATIO from ZBKLIBRARYASSET where ZCONTENTTYPE = 1 and ZPURCHASEDATE not null order by ZLASTOPENDATE desc;"
     );
 
     books.value = query[0].values.map((row) => {
@@ -50,6 +62,12 @@ function process() {
       book.ZLASTOPENDATE = Number(row[6]?.toString());
       book.ZEPUBID = row[7]?.toString();
       book.ZURL = row[8]?.toString();
+      book.ZBOOKDESCRIPTION = row[9]?.toString();
+      book.ZVERSIONNUMBER = Number(row[10]?.toString());
+      book.ZRELEASEDATE = Number(row[11]?.toString());
+      book.ZGENRE = row[12]?.toString();
+      book.ZSTOREID = Number(row[13]?.toString());
+      book.ZCOVERASPECTRATIO = Number(row[14]?.toString());
       return book;
     });
 
@@ -58,46 +76,53 @@ function process() {
   r.readAsArrayBuffer(f);
 }
 
+const showCheck = ref(false);
+
+function copyPath() {
+  copy("~/Library/Containers/com.apple.iBooksX/Data/Documents/BKLibrary");
+  showCheck.value = true;
+  setTimeout(() => {
+    showCheck.value = false;
+  }, 500);
+}
+
 function getDate(date: number) {
   return new Date((date + 978307200) * 1000).toLocaleDateString();
 }
 </script>
 <template>
-  <h1>iBooks to CSV</h1>
-  <p>Open Finder</p>
-  <p>Go -> Go To Folder</p>
-  <pre>⇧⌘G</pre>
-  <pre>~/Library/Containers/com.apple.iBooksX/Data/Documents/BKLibrary</pre>
-  <input ref="fileElement" type="file" />
-  <button @click="process">Process</button>
-  <table>
-    <thead>
-      <tr>
-        <th>Title</th>
-        <th>Author</th>
-        <th>Finished</th>
-        <th>Date Finished</th>
-        <th>Purchase Date</th>
-        <th>Reading Progress</th>
-        <th>Last Opened Date</th>
-        <th>EPUB ID</th>
-        <th>URL</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr v-for="book in books" :key="book.ZTITLE">
-        <td>{{ book.ZTITLE }}</td>
-        <td>{{ book.ZAUTHOR }}</td>
-        <td>{{ book.ZISFINISHED }}</td>
-        <td>{{ getDate(book.ZDATEFINISHED ?? 0) }}</td>
-        <td>{{ getDate(book.ZPURCHASEDATE ?? 0) }}</td>
-        <td>{{ book.ZREADINGPROGRESS }}</td>
-        <td>{{ getDate(book.ZLASTOPENDATE ?? 0) }}</td>
-        <td>{{ book.ZEPUBID }}</td>
-        <td>{{ book.ZURL }}</td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="mt-4 container mx-auto text-center flex flex-col gap-4 w-full">
+    <h1 class="text-4xl">iBooks Info</h1>
+    <div class="mx-auto flex w-full max-w-[23rem] gap-2">
+      <input
+        id="npm-install"
+        type="text"
+        class="col-span-6 bg-gray-50 border border-gray-300 text-gray-500 text-sm rounded-lg block w-full p-2.5"
+        value="~/Library/Containers/com.apple.iBooksX/Data/Documents/BKLibrary"
+        disabled
+        readonly
+      />
+      <Button @click="copyPath()" variant="outline" size="icon">
+        <Copy v-if="!showCheck" class="w-4 h-4" />
+        <Check v-if="showCheck" class="w-4 h-4" />
+      </Button>
+    </div>
+    <p>Open Finder, Go → Go To Folder... (⇧⌘G)</p>
+    <div
+      class="mx-auto max-w-sm w-full h-20 rounded-xl border-dashed border-4 text-center content-center text-slate-500"
+    >
+      <p>Upload .sqlite</p>
+      <input ref="fileElement" type="file" />
+    </div>
+    <Button class="mx-auto max-w-sm w-full" @click="process">Read</Button>
+    <div
+      class="mx-auto mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 grid-flow-row gap-4"
+    >
+      <div v-for="book in books" class="w-full max-w-sm bg-red-400 rounded-sm">
+        {{ book.ZTITLE }}
+      </div>
+    </div>
+  </div>
 </template>
 
 <style scoped>
