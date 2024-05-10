@@ -3,8 +3,18 @@ import initSqlJs from "sql.js";
 import { ref } from "vue";
 import { Check, Copy } from "lucide-vue-next";
 import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 import { useClipboard } from "@vueuse/core";
+import { useDropZone } from "@vueuse/core";
 
 const { copy } = useClipboard();
 
@@ -15,29 +25,38 @@ interface BookEntry {
   ZDATEFINISHED?: number;
   ZPURCHASEDATE?: number;
   ZREADINGPROGRESS?: number;
-  ZLASTOPENDATE?: number;
   ZEPUBID?: string;
-  ZURL?: string;
-  ZBOOKDESCRIPTION?: string;
-  ZVERSIONNUMBER?: number;
-  ZRELEASEDATE?: number;
-  ZGENRE?: string;
-  ZSTOREID?: number;
   ZCOVERASPECTRATIO?: number;
 }
 
 const books = ref<BookEntry[]>([]);
 
-const fileElement = ref();
+const dropZoneRef = ref<HTMLDivElement>();
 
 const SQL = await initSqlJs({
   locateFile: (file) => `https://sql.js.org/dist/${file}`,
 });
 
+const fileName = ref("Upload BKLibrary-SOMENUMBERS.sqlite");
+
 let db;
 
-function process() {
-  const f = fileElement.value.files[0];
+function onDrop(files: File[] | null) {
+  if (files && files.length > 0) {
+    const file = files[0];
+    fileName.value = file.name;
+    if (file.name.startsWith("BKLibrary") && file.name.endsWith(".sqlite")) {
+      process(file);
+    }
+  }
+}
+
+useDropZone(dropZoneRef, {
+  onDrop,
+});
+
+function process(file: File) {
+  const f = file;
   const r = new FileReader();
   r.onload = function () {
     if (r.result === null) {
@@ -48,7 +67,7 @@ function process() {
     db = new SQL.Database(Uints);
 
     const query = db.exec(
-      "select ZTITLE, ZAUTHOR, ZISFINISHED, ZDATEFINISHED, ZPURCHASEDATE, ZREADINGPROGRESS, ZLASTOPENDATE, ZEPUBID, ZURL, ZBOOKDESCRIPTION, ZVERSIONNUMBER, ZRELEASEDATE, ZGENRE, ZSTOREID, ZCOVERASPECTRATIO from ZBKLIBRARYASSET where ZCONTENTTYPE = 1 and ZPURCHASEDATE not null order by ZLASTOPENDATE desc;"
+      "select ZTITLE, ZAUTHOR, ZISFINISHED, ZDATEFINISHED, ZPURCHASEDATE, ZREADINGPROGRESS, ZEPUBID, ZCOVERASPECTRATIO from ZBKLIBRARYASSET where ZCONTENTTYPE = 1 and ZPURCHASEDATE not null order by ZLASTOPENDATE desc;"
     );
 
     books.value = query[0].values.map((row) => {
@@ -59,19 +78,10 @@ function process() {
       book.ZDATEFINISHED = Number(row[3]?.toString());
       book.ZPURCHASEDATE = Number(row[4]?.toString());
       book.ZREADINGPROGRESS = Number(row[5]?.toString());
-      book.ZLASTOPENDATE = Number(row[6]?.toString());
       book.ZEPUBID = row[7]?.toString();
-      book.ZURL = row[8]?.toString();
-      book.ZBOOKDESCRIPTION = row[9]?.toString();
-      book.ZVERSIONNUMBER = Number(row[10]?.toString());
-      book.ZRELEASEDATE = Number(row[11]?.toString());
-      book.ZGENRE = row[12]?.toString();
-      book.ZSTOREID = Number(row[13]?.toString());
       book.ZCOVERASPECTRATIO = Number(row[14]?.toString());
       return book;
     });
-
-    console.log(books);
   };
   r.readAsArrayBuffer(f);
 }
@@ -93,7 +103,7 @@ function getDate(date: number) {
 <template>
   <div class="mt-4 container mx-auto text-center flex flex-col gap-4 w-full">
     <h1 class="text-4xl">iBooks Info</h1>
-    <div class="mx-auto flex w-full max-w-[23rem] gap-2">
+    <div class="mx-auto flex w-full max-w-md gap-2">
       <input
         id="npm-install"
         type="text"
@@ -109,19 +119,41 @@ function getDate(date: number) {
     </div>
     <p>Open Finder, Go → Go To Folder... (⇧⌘G)</p>
     <div
+      ref="dropZoneRef"
       class="mx-auto max-w-sm w-full h-20 rounded-xl border-dashed border-4 text-center content-center text-slate-500"
     >
-      <p>Upload .sqlite</p>
-      <input ref="fileElement" type="file" />
+      <p>{{ fileName }}</p>
     </div>
-    <Button class="mx-auto max-w-sm w-full" @click="process">Read</Button>
-    <div
-      class="mx-auto mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 grid-flow-row gap-4"
-    >
-      <div v-for="book in books" class="w-full max-w-sm bg-red-400 rounded-sm">
-        {{ book.ZTITLE }}
-      </div>
-    </div>
+    <Table v-if="books.length > 0" class="mx-auto w-full max-w-md">
+      <TableCaption>A list of your Apple Books.</TableCaption>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Title</TableHead>
+          <TableHead>Author</TableHead>
+          <TableHead>Date Purchased</TableHead>
+          <TableHead>Finished?</TableHead>
+          <TableHead>Date Finished</TableHead>
+          <TableHead>% Read</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        <TableRow v-for="book in books" :key="book.ZEPUBID">
+          <TableCell class="font-medium">
+            {{ book.ZTITLE }}
+          </TableCell>
+          <TableCell>{{ book.ZAUTHOR }}</TableCell>
+          <TableCell>{{ getDate(book.ZPURCHASEDATE ?? 0) }}</TableCell>
+          <TableCell>{{ book.ZISFINISHED ? "✅" : "❌" }}</TableCell>
+          <TableCell v-if="book.ZISFINISHED">{{
+            getDate(book.ZDATEFINISHED ?? 0)
+          }}</TableCell>
+          <TableCell v-else="book.ZISFINISHED">Not Finished</TableCell>
+          <TableCell
+            >{{ ((book.ZREADINGPROGRESS ?? 0) * 100).toFixed(0) }}%</TableCell
+          >
+        </TableRow>
+      </TableBody>
+    </Table>
   </div>
 </template>
 
